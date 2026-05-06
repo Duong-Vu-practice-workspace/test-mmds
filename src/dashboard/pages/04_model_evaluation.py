@@ -10,7 +10,7 @@ st.title("📏 Model Evaluation")
 
 @st.cache_resource
 def get_pg_conn():
-    return psycopg2.connect("host=postgres dbname=otto_recommender user=otto password=otto123")
+    return psycopg2.connect("host=localhost dbname=otto_recommender user=otto password=otto123")
 
 
 pg = get_pg_conn()

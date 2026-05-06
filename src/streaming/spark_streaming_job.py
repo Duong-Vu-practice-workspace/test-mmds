@@ -12,7 +12,7 @@ def create_spark_session(app_name: str = "OTTO_Streaming") -> SparkSession:
     return (
         SparkSession.builder
         .appName(app_name)
-        .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0")
+        .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.13:4.1.1")
         .config("spark.sql.adaptive.enabled", "true")
         .config("spark.sql.adaptive.coalescePartitions.enabled", "true")
         .getOrCreate()
@@ -41,7 +41,7 @@ def main():
     df = (
         spark.readStream
         .format("kafka")
-        .option("kafka.bootstrap.servers", "kafka:9092")
+        .option("kafka.bootstrap.servers", "localhost:29092")
         .option("subscribe", "user-events")
         .option("startingOffsets", "latest")
         .load()
@@ -87,7 +87,7 @@ def main():
         .select(to_json(struct("*")).alias("value"))
         .writeStream
         .format("kafka")
-        .option("kafka.bootstrap.servers", "kafka:9092")
+        .option("kafka.bootstrap.servers", "localhost:29092")
         .option("topic", "processed-events")
         .option("checkpointLocation", "/tmp/checkpoint/processed-events")
         .start()

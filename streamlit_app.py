@@ -4,10 +4,10 @@ from typing import List, Tuple
 
 import pandas as pd
 import streamlit as st
-import torch
-import torch.nn as nn
-import pytorch_lightning as pl_lightning
-from torch.nn import Dropout
+# import torch
+# import torch.nn as nn
+# import pytorch_lightning as pl_lightning
+# from torch.nn import Dropout
 
 
 @st.cache_data(show_spinner=False)
@@ -34,6 +34,8 @@ def load_test_sessions(test_path: Path) -> List[Tuple[int, List[int]]]:
     return sessions
 
 
+# Torch-dependent code commented out (temporarily)
+"""
 class DynamicPositionEmbedding(nn.Module):
     def __init__(self, max_len: int, dimension: int):
         super().__init__()
@@ -145,6 +147,7 @@ def predict_topk(model: SASRec, session_aids: List[int], k: int, device: torch.d
         logits[:, 0] = -float("inf")
         _, indices = torch.topk(logits, k=k, dim=-1)
     return indices.squeeze(0).tolist()
+"""
 
 
 def main():
@@ -187,21 +190,23 @@ def main():
     st.markdown("**History (clicks)**")
     st.write(history_aids)
 
-    try:
-        model = load_model(checkpoint_path)
-    except Exception as exc:
-        st.error(str(exc))
-        return
+    # Torch-dependent code commented out temporarily
+    st.info("Torch is not installed. Model loading and prediction are disabled.")
+    # try:
+    #     model = load_model(checkpoint_path)
+    # except Exception as exc:
+    #     st.error(str(exc))
+    #     return
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to(device)
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # model.to(device)
 
-    if st.button("Predict next items"):
-        with st.spinner("Đang dự đoán..."):
-            preds = predict_topk(model, history_aids, k, device)
-        st.markdown("**Predicted top-{} item IDs**".format(k))
-        st.write(preds)
-        st.table(pd.DataFrame({"rank": list(range(1, len(preds) + 1)), "item_id": preds}))
+    # if st.button("Predict next items"):
+    #     with st.spinner("Đang dự đoán..."):
+    #         preds = predict_topk(model, history_aids, k, device)
+    #     st.markdown("**Predicted top-{} item IDs**".format(k))
+    #     st.write(preds)
+    #     st.table(pd.DataFrame({"rank": list(range(1, len(preds) + 1)), "item_id": preds}))
 
     st.markdown("---")
     st.markdown("### Ghi chú")

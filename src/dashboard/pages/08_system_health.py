@@ -11,11 +11,11 @@ st.title("🏗️ System Health")
 
 @st.cache_resource
 def get_redis():
-    return redis.Redis(host='redis', port=6379, db=0, decode_responses=True)
+    return redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
 
 @st.cache_resource
 def get_pg_conn():
-    return psycopg2.connect("host=postgres dbname=otto_recommender user=otto password=otto123")
+    return psycopg2.connect("host=localhost dbname=otto_recommender user=otto password=otto123")
 
 st.markdown("### Service Status")
 

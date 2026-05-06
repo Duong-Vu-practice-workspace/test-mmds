@@ -12,7 +12,7 @@ app:
 # Kafka Configuration
 # -----------------------------------------------------------------------------
 kafka:
-  bootstrap_servers: "${KAFKA_HOST_EXTERNAL}:${KAFKA_PORT_EXTERNAL}"
+  bootstrap_servers: "${KAFKA_HOST_EXTERNAL:localhost}:${KAFKA_PORT_EXTERNAL:29092}"
 
   # Producer settings
   producer:
@@ -43,6 +43,23 @@ kafka:
       replication_factor: 1
       consumer_count: 1
       batch_size: 5
+
+# -----------------------------------------------------------------------------
+# Redis Configuration
+# -----------------------------------------------------------------------------
+redis:
+  host: "${REDIS_HOST:localhost}"
+  port: ${REDIS_PORT:6379}
+
+# -----------------------------------------------------------------------------
+# PostgreSQL Configuration
+# -----------------------------------------------------------------------------
+postgres:
+  host: "${POSTGRES_HOST:localhost}"
+  port: ${POSTGRES_PORT:5432}
+  database: "${POSTGRES_DB:otto_recommender}"
+  user: "${POSTGRES_USER:otto}"
+  password: "${POSTGRES_PASSWORD:otto123}"
 
 # -----------------------------------------------------------------------------
 # Spark Configuration

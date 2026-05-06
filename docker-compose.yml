@@ -1,59 +1,59 @@
 services:
-  spark-master:
-    image: bitnami/spark:3.5
-    container_name: spark-master
-    environment:
-      - SPARK_MODE=master
-      - SPARK_MASTER_HOST=spark-master
-    ports:
-      - "7077:7077"
-      - "8080:8080"
-    networks:
-      - spark-net
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 4g
+  # spark-master:
+  #   image: bitnami/spark:3.5
+  #   container_name: spark-master
+  #   environment:
+  #     - SPARK_MODE=master
+  #     - SPARK_MASTER_HOST=spark-master
+  #   ports:
+  #     - "7077:7077"
+  #     - "8080:8080"
+  #   networks:
+  #     - spark-net
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: '2.0'
+  #         memory: 4g
 
-  spark-worker:
-    image: bitnami/spark:3.5
-    container_name: spark-worker
-    depends_on:
-      - spark-master
-    environment:
-      - SPARK_MODE=worker
-      - SPARK_MASTER_URL=spark://spark-master:7077
-      - SPARK_WORKER_CORES=2
-      - SPARK_WORKER_MEMORY=4g
-    volumes:
-      - ./:/opt/app:ro
-    networks:
-      - spark-net
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 4g
+  # spark-worker:
+  #   image: bitnami/spark:3.5
+  #   container_name: spark-worker
+  #   depends_on:
+  #     - spark-master
+  #   environment:
+  #     - SPARK_MODE=worker
+  #     - SPARK_MASTER_URL=spark://spark-master:7077
+  #     - SPARK_WORKER_CORES=2
+  #     - SPARK_WORKER_MEMORY=4g
+  #   volumes:
+  #     - ./:/opt/app:ro
+  #   networks:
+  #     - spark-net
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: '2.0'
+  #         memory: 4g
 
-  spark-app:
-    image: bitnami/spark:3.5
-    container_name: spark-app
-    depends_on:
-      - spark-master
-    volumes:
-      - ./:/opt/app:ro
-    working_dir: /opt/app
-    environment:
-      - PYSPARK_PYTHON=/opt/bitnami/python/bin/python3
-      - SPARK_MASTER=spark://spark-master:7077
-    networks:
-      - spark-net
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 4g
+  # spark-app:
+  #   image: bitnami/spark:3.5
+  #   container_name: spark-app
+  #   depends_on:
+  #     - spark-master
+  #   volumes:
+  #     - ./:/opt/app:ro
+  #   working_dir: /opt/app
+  #   environment:
+  #     - PYSPARK_PYTHON=/opt/bitnami/python/bin/python3
+  #     - SPARK_MASTER=spark://spark-master:7077
+  #   networks:
+  #     - spark-net
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: '2.0'
+  #         memory: 4g
   kafka:
     image: docker.io/apache/kafka:4.1.1
     container_name: kafka
@@ -77,6 +77,10 @@ services:
       - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
       - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
       - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
+      # Fix hostname resolution issue
+      - KAFKA_OPTS=-Djava.net.preferIPv4Stack=true
+    networks:
+      - spark-net
     healthcheck:
       test: /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list
       interval: 10s
@@ -93,6 +97,8 @@ services:
       kafka:
         condition: service_healthy
     restart: always
+    networks:
+      - spark-net
     environment:
       - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
 
@@ -107,7 +113,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.5'
+          cpus: "0.5"
           memory: 1.5g
 
   postgres:
@@ -127,7 +133,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.0'
+          cpus: "1.0"
           memory: 2g
 
 networks:

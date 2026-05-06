@@ -241,9 +241,23 @@ async def main():
     args = parser.parse_args()
 
     config = get_config()
-    bootstrap_servers = args.bootstrap_servers or config.kafka.bootstrap_servers
+    kafka_config = config.get("kafka", {})
+    bootstrap_servers = args.bootstrap_servers or kafka_config.get("bootstrap_servers", "localhost:9092")
 
-    processor = StreamProcessor(bootstrap_servers)
+    # Redis and PostgreSQL config
+    redis_config = config.get("redis", {})
+    pg_config = config.get("postgres", {})
+
+    processor = StreamProcessor(
+        bootstrap_servers=bootstrap_servers,
+        redis_host=redis_config.get("host", "redis"),
+        redis_port=redis_config.get("port", 6379),
+        pg_host=pg_config.get("host", "postgres"),
+        pg_port=pg_config.get("port", 5432),
+        pg_db=pg_config.get("database", "otto_recommender"),
+        pg_user=pg_config.get("user", "otto"),
+        pg_password=pg_config.get("password", "otto123"),
+    )
 
     try:
         await processor.start()
