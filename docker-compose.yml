@@ -1,0 +1,138 @@
+services:
+  spark-master:
+    image: bitnami/spark:3.5
+    container_name: spark-master
+    environment:
+      - SPARK_MODE=master
+      - SPARK_MASTER_HOST=spark-master
+    ports:
+      - "7077:7077"
+      - "8080:8080"
+    networks:
+      - spark-net
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4g
+
+  spark-worker:
+    image: bitnami/spark:3.5
+    container_name: spark-worker
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_CORES=2
+      - SPARK_WORKER_MEMORY=4g
+    volumes:
+      - ./:/opt/app:ro
+    networks:
+      - spark-net
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4g
+
+  spark-app:
+    image: bitnami/spark:3.5
+    container_name: spark-app
+    depends_on:
+      - spark-master
+    volumes:
+      - ./:/opt/app:ro
+    working_dir: /opt/app
+    environment:
+      - PYSPARK_PYTHON=/opt/bitnami/python/bin/python3
+      - SPARK_MASTER=spark://spark-master:7077
+    networks:
+      - spark-net
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4g
+  kafka:
+    image: docker.io/apache/kafka:4.1.1
+    container_name: kafka
+    ports:
+      - "29092:29092"
+    volumes:
+      - "./kafka_data:/var/lib/kafka/data"
+    environment:
+      # KRaft settings
+      - KAFKA_NODE_ID=0
+      - KAFKA_PROCESS_ROLES=controller,broker
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      # Listeners
+      - KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:29092
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,EXTERNAL://${KAFKA_HOST_EXTERNAL}:${KAFKA_PORT_EXTERNAL}
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      # Single-node optimizations
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
+      - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
+    healthcheck:
+      test: /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui
+    container_name: kafka-ui
+    ports:
+      - "8989:8080"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: always
+    environment:
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 1gb --maxmemory-policy allkeys-lru
+    networks:
+      - spark-net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1.5g
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=otto_recommender
+      - POSTGRES_USER=otto
+      - POSTGRES_PASSWORD=otto123
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d
+    networks:
+      - spark-net
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2g
+
+networks:
+  spark-net:
+    driver: bridge
+
+volumes:
+  pgdata:
