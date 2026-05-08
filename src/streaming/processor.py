@@ -22,10 +22,10 @@ class StreamProcessor:
     def __init__(
         self,
         bootstrap_servers: str,
-        redis_host: str = "redis",
+        redis_host: str = "localhost",
         redis_port: int = 6379,
-        pg_host: str = "postgres",
-        pg_port: int = 5432,
+        pg_host: str = "localhost",
+        pg_port: int = 5433,
         pg_db: str = "otto_recommender",
         pg_user: str = "otto",
         pg_password: str = "otto123",
@@ -241,23 +241,9 @@ async def main():
     args = parser.parse_args()
 
     config = get_config()
-    kafka_config = config.get("kafka", {})
-    bootstrap_servers = args.bootstrap_servers or kafka_config.get("bootstrap_servers", "localhost:9092")
+    bootstrap_servers = args.bootstrap_servers or config.get("kafka", {}).get("bootstrap_servers", "localhost:29092")
 
-    # Redis and PostgreSQL config
-    redis_config = config.get("redis", {})
-    pg_config = config.get("postgres", {})
-
-    processor = StreamProcessor(
-        bootstrap_servers=bootstrap_servers,
-        redis_host=redis_config.get("host", "redis"),
-        redis_port=redis_config.get("port", 6379),
-        pg_host=pg_config.get("host", "postgres"),
-        pg_port=pg_config.get("port", 5432),
-        pg_db=pg_config.get("database", "otto_recommender"),
-        pg_user=pg_config.get("user", "otto"),
-        pg_password=pg_config.get("password", "otto123"),
-    )
+    processor = StreamProcessor(bootstrap_servers)
 
     try:
         await processor.start()

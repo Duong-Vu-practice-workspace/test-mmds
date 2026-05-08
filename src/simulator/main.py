@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 CONFIG = get_config()
-KAFKA_SERVERS = CONFIG.kafka.bootstrap_servers
+KAFKA_SERVERS = CONFIG.get("kafka", {}).get("bootstrap_servers", "localhost:29092")
 TRAIN_DATA_PATH = "datasets/raw/train.jsonl"
 
 
