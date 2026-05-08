@@ -241,6 +241,7 @@ async def get_stats():
         "hourly_stats": db.get_hourly_stats() if db else [],
         "session_distribution": db.get_session_distribution() if db else [],
         "spark_metrics": db.get_spark_metrics() if db else [],
+        "anomaly_logs": db.get_anomalies(limit=50) if db else [],
     }
 
 
