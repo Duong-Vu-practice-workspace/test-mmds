@@ -111,3 +111,15 @@ CREATE TABLE IF NOT EXISTS spark_metrics (
 );
 
 CREATE INDEX IF NOT EXISTS idx_spark_metrics_time ON spark_metrics(timestamp DESC);
+
+-- Theo dõi độ chính xác của gợi ý thời gian thực (Online Hit/Conversion)
+CREATE TABLE IF NOT EXISTS online_hits (
+    id SERIAL PRIMARY KEY,
+    session_id BIGINT,
+    aid INT,
+    event_type VARCHAR(10),
+    is_hit BOOLEAN,
+    timestamp TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_online_hits_session ON online_hits(session_id);

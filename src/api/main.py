@@ -102,6 +102,23 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Kafka not available (will skip publishing): {e}")
         kafka_producer = None
 
+    # Ensure tables exist
+    if db:
+        try:
+            with db.cursor() as cur:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS online_hits (
+                        id SERIAL PRIMARY KEY,
+                        session_id BIGINT,
+                        aid INT,
+                        event_type TEXT,
+                        is_hit BOOLEAN,
+                        timestamp TIMESTAMPTZ DEFAULT NOW()
+                    )
+                """)
+        except Exception as e:
+            logger.warning(f"Failed to ensure online_hits table: {e}")
+
     yield
 
     # Shutdown
@@ -186,6 +203,20 @@ async def receive_event(event: EventRequest):
             latency_ms=latency_ms,
         )
 
+    # 5. Online Evaluation (Hit Checking)
+    if db and event.type in ["carts", "orders"]:
+        last_recs = session_mgr.get_last_recommendations(event.session_id)
+        if last_recs:
+            # Check if this aid was recommended for ANY type
+            all_recs = set(last_recs.get("clicks", []) + last_recs.get("carts", []) + last_recs.get("orders", []))
+            is_hit = event.aid in all_recs
+            db.log_online_hit(event.session_id, event.aid, event.type, is_hit)
+            if is_hit:
+                logger.info(f"🎯 ONLINE HIT! Session {event.session_id} {event.type} aid {event.aid}")
+
+    # 6. Cache current recommendations for next event evaluation
+    session_mgr.store_recommendations(event.session_id, recommendations)
+
     return EventResponse(
         status="ok",
         session_length=session_length,
@@ -242,6 +273,7 @@ async def get_stats():
         "session_distribution": db.get_session_distribution() if db else [],
         "spark_metrics": db.get_spark_metrics() if db else [],
         "anomaly_logs": db.get_anomalies(limit=50) if db else [],
+        "hit_rate_stats": db.get_hit_rate_stats() if db else {},
     }
 
 

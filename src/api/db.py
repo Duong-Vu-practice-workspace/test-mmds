@@ -248,6 +248,36 @@ class Database:
             logger.error(f"Failed to get spark metrics: {e}")
             return []
 
+    def log_online_hit(self, session_id: int, aid: int, event_type: str, is_hit: bool):
+        """Log whether an order/cart event was a result of a recommendation."""
+        try:
+            with self.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO online_hits (session_id, aid, event_type, is_hit)
+                    VALUES (%s, %s, %s, %s)
+                    """,
+                    (session_id, aid, event_type, is_hit),
+                )
+        except Exception as e:
+            logger.error(f"Failed to log online hit: {e}")
+
+    def get_hit_rate_stats(self) -> Dict[str, float]:
+        """Get aggregate online hit rates."""
+        try:
+            with self.cursor() as cur:
+                cur.execute("""
+                    SELECT 
+                        COUNT(*) as total_actions,
+                        SUM(CASE WHEN is_hit THEN 1 ELSE 0 END) as total_hits,
+                        AVG(CASE WHEN is_hit THEN 1.0 ELSE 0.0 END) as hit_rate
+                    FROM online_hits
+                """)
+                return dict(cur.fetchone() or {"total_actions": 0, "total_hits": 0, "hit_rate": 0})
+        except Exception as e:
+            logger.error(f"Failed to get hit rate stats: {e}")
+            return {"total_actions": 0, "total_hits": 0, "hit_rate": 0}
+
     def close(self):
         if self._conn:
             self._conn.close()

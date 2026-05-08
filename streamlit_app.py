@@ -108,7 +108,7 @@ if view == "📈 Dashboard Overview":
 elif view == "🔬 Advanced Analytics":
     st.subheader("🔬 Advanced Batch Analytics")
     if stats:
-        t1, t2, t3 = st.tabs(["🎯 Conversion Funnel", "⏰ Hourly Traffic", "👥 Session Insights"])
+        t1, t2, t3, t4 = st.tabs(["🎯 Conversion Funnel", "⏰ Hourly Traffic", "👥 Session Insights", "📈 Online Evaluation"])
         
         with t1:
             f_data = stats.get("funnel_stats", {})
@@ -136,6 +136,26 @@ elif view == "🔬 Advanced Analytics":
             if sess_dist:
                 df_s = pd.DataFrame(sess_dist)
                 st.plotly_chart(px.bar(df_s, x='session_type', y='count', color='avg_length', template="plotly_dark"), use_container_width=True)
+
+        with t4:
+            hr_stats = stats.get("hit_rate_stats", {})
+            if hr_stats and hr_stats.get("total_actions", 0) > 0:
+                st.subheader("🎯 Real-time Recommendation Accuracy")
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Hit Rate (Conversion)", f"{hr_stats.get('hit_rate', 0)*100:.2f}%")
+                c2.metric("Total Hits", hr_stats.get("total_hits", 0))
+                c3.metric("Total Eval Actions", hr_stats.get("total_actions", 0))
+                
+                # Visual Gauge
+                rate = hr_stats.get('hit_rate', 0) * 100
+                st.plotly_chart(go.Figure(go.Indicator(
+                    mode = "gauge+number",
+                    value = rate,
+                    title = {'text': "Hit Rate %"},
+                    gauge = {'axis': {'range': [0, 100]}, 'bar': {'color': "darkblue"}, 'steps': [{'range': [0, 5], 'color': "red"}, {'range': [5, 15], 'color': "yellow"}, {'range': [15, 100], 'color': "green"}]}
+                )).update_layout(template="plotly_dark", height=300), use_container_width=True)
+            else:
+                st.info("No online evaluation data yet. Start sending order/cart events to see conversion accuracy.")
 
 # --- View: Anomaly Detection ---
 elif view == "🚨 Anomaly Detection":

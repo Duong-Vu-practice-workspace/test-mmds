@@ -63,6 +63,18 @@ class SessionManager:
     def delete_session(self, session_id: int | str) -> None:
         """Delete a session."""
         self.redis.delete(self._key(session_id))
+        self.redis.delete(f"recs:{session_id}")
+
+    def store_recommendations(self, session_id: int | str, recommendations: Dict[str, List[int]]) -> None:
+        """Store the latest recommendations for a session for evaluation."""
+        key = f"recs:{session_id}"
+        self.redis.setex(key, SESSION_TTL_SECONDS, json.dumps(recommendations))
+
+    def get_last_recommendations(self, session_id: int | str) -> Optional[Dict[str, List[int]]]:
+        """Get the cached recommendations for a session."""
+        key = f"recs:{session_id}"
+        data = self.redis.get(key)
+        return json.loads(data) if data else None
 
     def get_active_session_count(self) -> int:
         """Get approximate count of active sessions."""
