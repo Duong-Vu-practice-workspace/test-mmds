@@ -81,6 +81,7 @@ def main():
         .appName("OTTO-Streaming-Processor") \
         .config("spark.sql.streaming.checkpointLocation", CHECKPOINT_LOCATION) \
         .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.postgresql:postgresql:42.7.1") \
+        .config("spark.sql.session.timeZone", "GMT+7") \
         .getOrCreate()
 
     spark.sparkContext.setLogLevel("WARN")

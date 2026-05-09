@@ -89,7 +89,7 @@ async def lifespan(app: FastAPI):
     cold_start = ColdStartRecommender(db=db, covisitation_recommender=covisitation)
     
     # Init SASRec (Deep Learning) - FORCED REMOTE MODE
-    remote_url = os.getenv("SASREC_REMOTE_URL", "")
+    remote_url = os.getenv("SASREC_REMOTE_URL", "https://rs-model1.vucongtuanduong.dpdns.org/")
     if not remote_url:
         logger.error("CRITICAL: SASREC_REMOTE_URL is not set! Remote inference is REQUIRED. Exiting...")
         sys.exit(1)

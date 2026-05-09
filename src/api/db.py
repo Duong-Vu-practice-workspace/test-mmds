@@ -30,6 +30,8 @@ class Database:
         if self._conn is None or self._conn.closed:
             self._conn = psycopg2.connect(**self.conn_params)
             self._conn.autocommit = True
+            with self._conn.cursor() as cur:
+                cur.execute("SET TIME ZONE 'Asia/Ho_Chi_Minh'")
         return self._conn
 
     @contextmanager

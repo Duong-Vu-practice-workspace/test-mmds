@@ -33,6 +33,7 @@ def main():
         .appName("OTTO-Funnel-Analysis") \
         .config("spark.jars.packages", "org.postgresql:postgresql:42.7.1") \
         .config("spark.driver.memory", "4g") \
+        .config("spark.sql.session.timeZone", "GMT+7") \
         .getOrCreate()
 
     spark.sparkContext.setLogLevel("WARN")

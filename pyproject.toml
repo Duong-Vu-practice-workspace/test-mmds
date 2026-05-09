@@ -20,8 +20,11 @@ dependencies = [
     "pyarrow>=23.0.1",
     "pyspark>=3.5.0,<4.0.0",
     "python-dotenv==1.1.1",
+    "pytorch-lightning>=2.6.1",
     "redis>=5.0.0",
     "seaborn>=0.13.2",
     "streamlit>=1.57.0",
+    "torch>=2.11.0",
     "uvicorn>=0.34.0",
+    "wrapt>=2.1.2",
 ]
