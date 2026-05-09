@@ -135,7 +135,7 @@ def main(input_path: str):
     
     funnel_df.write.jdbc(url=PG_URL, table="funnel_stats", mode="append", properties=PG_PROPERTIES)
 
-    print("✅ Batch Analysis completed successfully.")
+    print("Batch Analysis completed successfully.")
     spark.stop()
 
 if __name__ == "__main__":

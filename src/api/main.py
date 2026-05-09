@@ -1,13 +1,14 @@
 """
-FastAPI Server — OTTO Recommender Pipeline API.
+FastAPI Server - OTTO Recommender Pipeline API.
 Receives events from clients, manages sessions via Redis,
-returns recommendations, and publishes events to Kafka.
+returns recommendations (Hybrid Inference), and publishes events to Kafka.
 """
 
 import time
 import logging
 import asyncio
 import sys
+import os
 from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import List, Optional
@@ -24,6 +25,7 @@ from src.api.session_manager import SessionManager
 from src.api.db import Database
 from src.api.cold_start import ColdStartRecommender
 from src.serving.covisitation_recommender import CovisitationRecommender
+from src.serving.sasrec_recommender import SASRecRecommender
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
@@ -33,12 +35,10 @@ session_mgr: Optional[SessionManager] = None
 db: Optional[Database] = None
 cold_start: Optional[ColdStartRecommender] = None
 covisitation: Optional[CovisitationRecommender] = None
+sasrec: Optional[SASRecRecommender] = None
 kafka_producer = None  # optional, will try to connect
 
-# Threshold: session needs this many events before using SASRec
-COLD_START_THRESHOLD = 3
 TOP_K = 20
-
 
 # --- Pydantic Models ---
 class EventRequest(BaseModel):
@@ -47,7 +47,6 @@ class EventRequest(BaseModel):
     type: str  # "clicks", "carts", "orders"
     ts: Optional[int] = None
 
-
 class EventResponse(BaseModel):
     status: str
     session_length: int
@@ -55,23 +54,20 @@ class EventResponse(BaseModel):
     recommendations: dict  # {clicks: [...], carts: [...], orders: [...]}
     latency_ms: float
 
-
 class SessionResponse(BaseModel):
     session_id: int
     events: list
     length: int
-
 
 class HealthResponse(BaseModel):
     status: str
     redis: str
     postgres: str
 
-
 # --- Lifespan ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global session_mgr, db, cold_start, covisitation, kafka_producer
+    global session_mgr, db, cold_start, covisitation, sasrec, kafka_producer
 
     logger.info("Starting OTTO API Server...")
 
@@ -91,6 +87,15 @@ async def lifespan(app: FastAPI):
 
     # Init Cold Start
     cold_start = ColdStartRecommender(db=db, covisitation_recommender=covisitation)
+    
+    # Init SASRec (Deep Learning) - FORCED REMOTE MODE
+    remote_url = os.getenv("SASREC_REMOTE_URL", "")
+    if not remote_url:
+        logger.error("CRITICAL: SASREC_REMOTE_URL is not set! Remote inference is REQUIRED. Exiting...")
+        sys.exit(1)
+    
+    sasrec = SASRecRecommender(remote_url=remote_url)
+    logger.info(f"SASRec initialized in FORCED REMOTE mode (Kaggle Host: {remote_url})")
 
     # Try Kafka (optional for prototype)
     try:
@@ -140,16 +145,6 @@ app = FastAPI(
 
 @app.post("/api/event", response_model=EventResponse)
 async def receive_event(event: EventRequest):
-    """
-    Receive a user event and return recommendations.
-
-    Flow:
-    1. Append event to Redis session
-    2. Publish to Kafka (if available)
-    3. Get recommendations (cold-start or covisitation)
-    4. Log prediction to PostgreSQL
-    5. Return top-K recommendations
-    """
     start_time = time.time()
 
     # 1. Append to Redis
@@ -171,14 +166,13 @@ async def receive_event(event: EventRequest):
     if db:
         db.log_event(event.session_id, event.aid, event.type, ts)
 
-    # 4. Get recommendations
+    # 4. Get recommendations using HYBRID LOGIC
     session_aids = session_mgr.get_session_aids(event.session_id)
 
-    if session_length < COLD_START_THRESHOLD:
+    if session_length < 3:
         model_used = "cold_start"
         recommendations = cold_start.recommend(session_aids, TOP_K)
-    else:
-        # Use covisitation (SASRec can be added later when checkpoint is ready)
+    elif 3 <= session_length < 10:
         model_used = "covisitation"
         if covisitation:
             try:
@@ -188,6 +182,9 @@ async def receive_event(event: EventRequest):
                 recommendations = cold_start.recommend(session_aids, TOP_K)
         else:
             recommendations = cold_start.recommend(session_aids, TOP_K)
+    else:
+        model_used = "sasrec_deep_learning"
+        recommendations = sasrec.recommend_multi_objective(session_aids, TOP_K)
 
     latency_ms = (time.time() - start_time) * 1000
 
@@ -203,18 +200,17 @@ async def receive_event(event: EventRequest):
             latency_ms=latency_ms,
         )
 
-    # 5. Online Evaluation (Hit Checking)
+    # 6. Online Evaluation (Hit Checking)
     if db and event.type in ["carts", "orders"]:
         last_recs = session_mgr.get_last_recommendations(event.session_id)
         if last_recs:
-            # Check if this aid was recommended for ANY type
             all_recs = set(last_recs.get("clicks", []) + last_recs.get("carts", []) + last_recs.get("orders", []))
             is_hit = event.aid in all_recs
             db.log_online_hit(event.session_id, event.aid, event.type, is_hit)
             if is_hit:
-                logger.info(f"🎯 ONLINE HIT! Session {event.session_id} {event.type} aid {event.aid}")
+                logger.info(f"ONLINE HIT! Session {event.session_id} {event.type} aid {event.aid}")
 
-    # 6. Cache current recommendations for next event evaluation
+    # 7. Cache current recommendations for next event evaluation
     session_mgr.store_recommendations(event.session_id, recommendations)
 
     return EventResponse(
@@ -228,26 +224,28 @@ async def receive_event(event: EventRequest):
 
 @app.get("/api/session/{session_id}", response_model=SessionResponse)
 async def get_session(session_id: int):
-    """Get the current event history for a session."""
     events = session_mgr.get_session(session_id)
     return SessionResponse(session_id=session_id, events=events, length=len(events))
 
 
 @app.get("/api/recommend/{session_id}")
 async def get_recommendations(session_id: int, top_k: int = 20):
-    """Get recommendations for an existing session (without adding a new event)."""
     session_aids = session_mgr.get_session_aids(session_id)
     session_length = len(session_aids)
 
-    if session_length < COLD_START_THRESHOLD:
+    # Hybrid Logic for standalone recommend endpoint
+    if session_length < 3:
         model_used = "cold_start"
         recommendations = cold_start.recommend(session_aids, top_k)
-    else:
+    elif 3 <= session_length < 10:
         model_used = "covisitation"
         if covisitation:
             recommendations = covisitation.recommend_multi_objective(session_aids, top_k)
         else:
             recommendations = cold_start.recommend(session_aids, top_k)
+    else:
+        model_used = "sasrec_deep_learning"
+        recommendations = sasrec.recommend_multi_objective(session_aids, top_k)
 
     return {
         "session_id": session_id,
@@ -259,7 +257,7 @@ async def get_recommendations(session_id: int, top_k: int = 20):
 
 @app.get("/api/stats")
 async def get_stats():
-    """Get system statistics."""
+    """Get rich system statistics for Dashboard."""
     return {
         "active_sessions": session_mgr.get_active_session_count() if session_mgr else 0,
         "prediction_stats": db.get_prediction_stats() if db else {},
@@ -279,27 +277,19 @@ async def get_stats():
 
 @app.get("/api/popular/{event_type}")
 async def get_popular(event_type: str, limit: int = 10):
-    """Get popular items with counts."""
     items = db.get_popular_items_with_counts(event_type, limit) if db else []
     return {"event_type": event_type, "items": items}
 
 
 @app.get("/api/health", response_model=HealthResponse)
 async def health_check():
-    """Check service health."""
     redis_status = "ok"
     pg_status = "ok"
-
+    try: session_mgr.redis.ping()
+    except: redis_status = "error"
     try:
-        session_mgr.redis.ping()
-    except Exception:
-        redis_status = "error"
-
-    try:
-        with db.cursor() as cur:
-            cur.execute("SELECT 1")
-    except Exception:
-        pg_status = "error"
+        with db.cursor() as cur: cur.execute("SELECT 1")
+    except: pg_status = "error"
 
     overall = "ok" if redis_status == "ok" and pg_status == "ok" else "degraded"
     return HealthResponse(status=overall, redis=redis_status, postgres=pg_status)
@@ -307,5 +297,4 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    # Use string reference for reload to work correctly
     uvicorn.run("src.api.main:app", host="0.0.0.0", port=8000, reload=True)
